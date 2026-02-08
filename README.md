@@ -39,7 +39,7 @@ A beautiful, real-time system monitoring tool designed specifically for Apple Si
 - Disk I/O (read/write speeds)
 - Network I/O (download/upload speeds)
 - Battery status (percentage, charging state, time remaining)
-- Top 5 CPU-consuming processes
+- Top CPU-consuming processes
 
 ## 📸 Screenshot
 
