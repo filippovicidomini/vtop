@@ -34,8 +34,9 @@ def parse_powermetrics(path='/tmp/vtop_powermetrics', timecode="0"):
 
 
 def clear_console():
-    command = 'clear'
-    os.system(command)
+    # Use ANSI escape codes for more reliable clearing
+    # \033[2J clears screen, \033[H moves cursor to top-left
+    print("\033[2J\033[H", end="", flush=True)
 
 
 def convert_to_GB(value):

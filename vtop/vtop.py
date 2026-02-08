@@ -1,10 +1,23 @@
 import time
 import argparse
 import os
+import signal
+import shutil
 from collections import deque
 from dashing import VSplit, HSplit, HGauge, HChart, Text
 from .utils import *
 import psutil
+
+# Global flag for terminal resize
+terminal_resized = False
+
+def handle_resize(signum, frame):
+    """Handle terminal resize signal"""
+    global terminal_resized
+    terminal_resized = True
+
+# Register resize handler
+signal.signal(signal.SIGWINCH, handle_resize)
 
 parser = argparse.ArgumentParser(
     description='vtop: Advanced system monitor for Apple Silicon Macs')
@@ -343,9 +356,23 @@ def main():
 
     clear_console()
 
+    # Get initial terminal size
+    term_size = shutil.get_terminal_size()
+
     count = 0
     try:
         while True:
+            global terminal_resized
+            
+            # Handle terminal resize - force dashing to recreate Terminal object
+            if terminal_resized:
+                terminal_resized = False
+                clear_console()
+                term_size = shutil.get_terminal_size()
+                # Force dashing to recreate the Terminal object on next display
+                if hasattr(ui, '_terminal'):
+                    del ui._terminal
+            
             if args.max_count > 0:
                 if count >= args.max_count:
                     count = 0

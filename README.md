@@ -71,7 +71,7 @@ A beautiful, real-time system monitoring tool designed specifically for Apple Si
 
 ## 🚀 Installation
 
-### From PyPI (recommended)
+### From PyPI (NOT YET PUBLISHED)
 ```bash
 pip install vtop
 ```
