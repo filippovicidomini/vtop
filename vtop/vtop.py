@@ -271,14 +271,12 @@ def main():
     swap_gauge = HGauge(title="Swap", val=0, color=args.color)
     ssd_gauge = HGauge(title="SSD", val=0, color=args.color)
     pressure_gauge = HGauge(title="Mem Pressure", val=0, color=args.color)
-    ram_text = Text(text="", color=args.color)
 
     ram_col = VSplit(
         ram_gauge,
         swap_gauge,
         ssd_gauge,
         pressure_gauge,
-        ram_text,
         title="Memory & Storage",
         border_color=args.color
     )
@@ -299,21 +297,14 @@ def main():
     )
 
     sys_text1 = Text(text="Loading...", color=args.color)
-    sys_text2 = Text(text="Loading...", color=args.color)
     
-    sys_col1 = VSplit(
+    sys_col = VSplit(
         sys_text1,
-        title="System",
-        border_color=args.color
-    )
-    
-    sys_col2 = VSplit(
-        sys_text2,
-        title="Battery & Procs",
+        title="System & Battery",
         border_color=args.color
     )
 
-    row3 = HSplit(power_col, sys_col1, sys_col2)
+    row3 = HSplit(power_col, sys_col)
 
     # ============ MAIN UI ============
     ui = VSplit(
@@ -443,8 +434,6 @@ def main():
                     pressure_gauge.title = f"Pressure: {mem_pressure['level']} ({mem_pressure['percent']}%)"
                     pressure_gauge.value = mem_pressure["percent"]
 
-                    ram_text.text = f"Free RAM: {ram['free_GB']}GB | Free SSD: {ssd_avail:.0f}GB"
-
                     # ===== ROW 3: Power + System =====
                     cpu_w = cpu_metrics["cpu_W"] / args.interval
                     gpu_w = cpu_metrics["gpu_W"] / args.interval
@@ -489,50 +478,32 @@ def main():
                     last_time = current_time
 
                     uptime = get_uptime()
-                    disk_usage = get_disk_usage()
                     load_avg = get_load_average()
                     
-                    # System column 1: Disk, Network, Thermal
-                    sys_info1 = f"""Thermal: {throttle}
-Uptime: {uptime}
+                    # System column: combined info
+                    sys_info = f"""Thermal: {throttle} | Uptime: {uptime}
 Load: {load_avg}
+DISK  Read: {format_speed(disk_read)} | Write: {format_speed(disk_write)}
+NET   Down: {format_speed(net_recv)} | Up: {format_speed(net_sent)}"""
 
-DISK
-  Usage: {disk_usage}
-  Read:  {format_speed(disk_read)}
-  Write: {format_speed(disk_write)}
+                    sys_text1.text = sys_info
 
-NETWORK
-  Down: {format_speed(net_recv)}
-  Up:   {format_speed(net_sent)}"""
-
-                    sys_text1.text = sys_info1
-
-                    # System column 2: Battery, Processes
+                    # Battery & Processes
                     battery = get_battery_info()
                     proc_count = get_process_count()
-                    top_procs = get_top_processes(5)
+                    top_procs = get_top_processes(3)
                     
                     if battery["available"]:
-                        batt_icon = "on cable" if battery["plugged"] else "on battery"
-                        batt_info = f"""BATTERY {batt_icon}
-  {battery['percent']:.0f}% - {battery['status']}
-  {battery['time']}"""
+                        batt_icon = "⚡" if battery["plugged"] else "🔋"
+                        batt_line = f"{batt_icon} {battery['percent']:.0f}% {battery['status']} ({battery['time']})"
                     else:
-                        batt_info = "BATTERY\n  Desktop Mac (no battery)"
+                        batt_line = "Desktop Mac (no battery)"
                     
-                    procs_str = "\n".join([f"  {p['name'][:12]:12} {p['cpu_percent']:.1f}%" 
-                                           for p in top_procs]) if top_procs else "  (idle)"
+                    procs_str = " | ".join([f"{p['name'][:8]}:{p['cpu_percent']:.0f}%" 
+                                           for p in top_procs]) if top_procs else "(idle)"
                     
-                    sys_info2 = f"""{batt_info}
-
-PROCESSES
-  {proc_count}
-
-TOP CPU:
-{procs_str}"""
-
-                    sys_text2.text = sys_info2
+                    sys_info += f"\n{batt_line}\nProcs: {proc_count}\nTop: {procs_str}"
+                    sys_text1.text = sys_info
 
                     ui.display()
 
