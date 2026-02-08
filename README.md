@@ -7,6 +7,7 @@ A beautiful, real-time system monitoring tool designed specifically for Apple Si
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![PyPI](https://img.shields.io/pypi/v/vtop.svg)
 
 ## ✨ Features
 
@@ -46,7 +47,12 @@ A beautiful, real-time system monitoring tool designed specifically for Apple Si
 
 ## 🚀 Installation
 
-### From GitHub (recommended)
+### From PyPI (recommended)
+```bash
+pip install vtop
+```
+
+### From GitHub
 ```bash
 pip install git+https://github.com/filippovicidomini/vtop.git
 ```
