@@ -426,8 +426,9 @@ def main():
                     ssd_total = disk_info["total"]
                     ssd_avail = disk_info["available"]
                     ssd_pct = disk_info["percent"]
-                    ssd_gauge.title = f"SSD {ssd_avail:.0f}GB free / {ssd_total:.0f}GB total"
-                    ssd_gauge.value = int(ssd_pct)
+                    ssd_free_pct = 100 - ssd_pct
+                    ssd_gauge.title = f"SSD {ssd_avail:.0f}GB free / {ssd_total:.0f}GB ({ssd_free_pct}% free)"
+                    ssd_gauge.value = int(ssd_free_pct)
 
                     # Memory Pressure
                     mem_pressure = get_memory_pressure()
