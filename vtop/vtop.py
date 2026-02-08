@@ -426,7 +426,7 @@ def main():
                     ssd_total = disk_info["total"]
                     ssd_avail = disk_info["available"]
                     ssd_pct = disk_info["percent"]
-                    ssd_gauge.title = f"SSD {ssd_used:.0f}/{ssd_total:.0f}GB ({ssd_pct}% used)"
+                    ssd_gauge.title = f"SSD {ssd_avail:.0f}GB free / {ssd_total:.0f}GB total"
                     ssd_gauge.value = int(ssd_pct)
 
                     # Memory Pressure
@@ -494,8 +494,8 @@ NET   Down: {format_speed(net_recv)} | Up: {format_speed(net_sent)}"""
                     top_procs = get_top_processes(3)
                     
                     if battery["available"]:
-                        batt_icon = "⚡" if battery["plugged"] else "🔋"
-                        batt_line = f"{batt_icon} {battery['percent']:.0f}% {battery['status']} ({battery['time']})"
+                        batt_status = "on cable" if battery["plugged"] else "on battery"
+                        batt_line = f"Battery: {battery['percent']:.0f}% {batt_status} ({battery['time']})"
                     else:
                         batt_line = "Desktop Mac (no battery)"
                     
