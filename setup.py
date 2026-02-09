@@ -8,7 +8,7 @@ setup(
     version='1.0.0',
     author='Filippo Vicidomini',
     author_email='',
-    description='Advanced system monitor for Apple Silicon Macs with per-core CPU tracking',
+    description='Advanced system monitor for macOS (Apple Silicon and Intel) with per-core CPU tracking',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/filippovicidomini/vtop',

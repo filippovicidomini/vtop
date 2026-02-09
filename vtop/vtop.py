@@ -6,6 +6,7 @@ import shutil
 from collections import deque
 from dashing import VSplit, HSplit, HGauge, HChart, Text
 from .utils import *
+from .providers import get_system_provider
 import psutil
 
 # Global flag for terminal resize
@@ -20,7 +21,7 @@ def handle_resize(signum, frame):
 signal.signal(signal.SIGWINCH, handle_resize)
 
 parser = argparse.ArgumentParser(
-    description='vtop: Advanced system monitor for Apple Silicon Macs')
+    description='vtop: Advanced system monitor for macOS (Intel and Apple Silicon)')
 parser.add_argument('--interval', type=int, default=1,
                     help='Display interval and sampling interval for powermetrics (seconds)')
 parser.add_argument('--color', type=int, default=2,
@@ -217,22 +218,48 @@ def get_memory_pressure():
 
 
 def main():
-    print("\nVTOP - Advanced System Monitor for Apple Silicon")
+    print("\nVTOP - Advanced System Monitor for macOS")
     print("Run with: sudo vtop")
     print("\033[?25l")
 
-    # Get SOC info
-    soc_info_dict = get_soc_info()
+    # Detect and initialize system provider
+    try:
+        provider = get_system_provider()
+        print(f"Detected architecture: {provider.get_architecture_name()}")
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        return 1
+
+    # Get SOC/CPU info
+    soc_info_dict = provider.get_soc_info()
     e_core_count = soc_info_dict["e_core_count"]
     p_core_count = soc_info_dict["p_core_count"]
     gpu_core_count = soc_info_dict["gpu_core_count"]
     chip_name = soc_info_dict["name"]
 
     # ============ ROW 1: CPU Cores (left) | GPU (right) ============
-    e_core_charts = [HChart(title=f"E{i}", color=args.color) for i in range(e_core_count)]
+    e_core_charts = [HChart(title=f"E{i}", color=args.color) for i in range(e_core_count)] if e_core_count > 0 else []
     p_core_charts = [HChart(title=f"P{i}", color=args.color) for i in range(p_core_count)]
 
-    if p_core_count <= 4:
+    # Layout CPU cores based on counts
+    if e_core_count == 0:
+        # Intel or non-hybrid: only P-cores
+        if p_core_count <= 8:
+            cpu_cores_col = VSplit(
+                HSplit(*p_core_charts),
+                title="CPU Cores",
+                border_color=args.color
+            )
+        else:
+            half = (p_core_count + 1) // 2
+            cpu_cores_col = VSplit(
+                HSplit(*p_core_charts[:half]),
+                HSplit(*p_core_charts[half:]),
+                title="CPU Cores",
+                border_color=args.color
+            )
+    elif p_core_count <= 4:
+        # Apple Silicon with few P-cores
         cpu_cores_col = VSplit(
             HSplit(*e_core_charts),
             HSplit(*p_core_charts),
@@ -240,6 +267,7 @@ def main():
             border_color=args.color
         )
     else:
+        # Apple Silicon with many P-cores
         half = (p_core_count + 1) // 2
         cpu_cores_col = VSplit(
             HSplit(*e_core_charts),
@@ -307,29 +335,35 @@ def main():
     row3 = HSplit(power_col, sys_col)
 
     # ============ MAIN UI ============
+    # Build title based on architecture
+    if e_core_count > 0:
+        ui_title = f"{chip_name} ({e_core_count}E + {p_core_count}P + {gpu_core_count}GPU)"
+    else:
+        ui_title = f"{chip_name} ({p_core_count} cores)"
+    
     ui = VSplit(
         row1,
         row2,
         row3,
-        title=f"{chip_name} ({e_core_count}E + {p_core_count}P + {gpu_core_count}GPU)",
+        title=ui_title,
         border_color=args.color
     )
 
-    cpu_max_power = soc_info_dict["cpu_max_power"]
-    gpu_max_power = soc_info_dict["gpu_max_power"]
+    cpu_max_power = soc_info_dict["cpu_max_power"] or 50  # Default if unknown
+    gpu_max_power = soc_info_dict["gpu_max_power"] or 25  # Default if unknown
 
     cpu_peak_power = 0
     gpu_peak_power = 0
     package_peak_power = 0
 
     timecode = str(int(time.time()))
-    powermetrics_process = run_powermetrics_process(timecode, interval=args.interval * 1000)
+    monitor_process = provider.start_monitoring(timecode, interval=args.interval * 1000)
 
     def get_reading(wait=0.1):
-        ready = parse_powermetrics(timecode=timecode)
+        ready = provider.get_metrics(timecode=timecode)
         while not ready:
             time.sleep(wait)
-            ready = parse_powermetrics(timecode=timecode)
+            ready = provider.get_metrics(timecode=timecode)
         return ready
 
     ready = get_reading()
@@ -367,12 +401,12 @@ def main():
             if args.max_count > 0:
                 if count >= args.max_count:
                     count = 0
-                    powermetrics_process.terminate()
+                    provider.cleanup(monitor_process)
                     timecode = str(int(time.time()))
-                    powermetrics_process = run_powermetrics_process(timecode, interval=args.interval * 1000)
+                    monitor_process = provider.start_monitoring(timecode, interval=args.interval * 1000)
                 count += 1
                 
-            ready = parse_powermetrics(timecode=timecode)
+            ready = provider.get_metrics(timecode=timecode)
             if ready:
                 cpu_metrics, gpu_metrics, thermal_pressure, _, timestamp = ready
 
@@ -382,16 +416,20 @@ def main():
                     time_delta = max(current_time - last_time, 0.1)
 
                     # ===== ROW 1: CPU Cores + GPU =====
-                    for idx, i in enumerate(cpu_metrics["e_core"]):
-                        active = cpu_metrics[f"E-Cluster{i}_active"]
-                        freq = cpu_metrics[f"E-Cluster{i}_freq_Mhz"]
-                        e_core_charts[idx].title = f"E{i} {active}% {freq}M"
-                        e_core_charts[idx].append(active)
+                    # Update E-cores if present
+                    if e_core_count > 0:
+                        for idx, i in enumerate(cpu_metrics["e_core"]):
+                            active = cpu_metrics[f"E-Cluster{i}_active"]
+                            freq = cpu_metrics[f"E-Cluster{i}_freq_Mhz"]
+                            e_core_charts[idx].title = f"E{i} {active}% {freq}M"
+                            e_core_charts[idx].append(active)
 
+                    # Update P-cores (or all cores for Intel)
                     for idx, i in enumerate(cpu_metrics["p_core"]):
                         active = cpu_metrics[f"P-Cluster{i}_active"]
                         freq = cpu_metrics[f"P-Cluster{i}_freq_Mhz"]
-                        p_core_charts[idx].title = f"P{i} {active}% {freq}M"
+                        core_label = f"P{i}" if e_core_count > 0 else f"C{i}"
+                        p_core_charts[idx].title = f"{core_label} {active}% {freq}M"
                         p_core_charts[idx].append(active)
 
                     gpu_active = gpu_metrics["active"]
@@ -400,13 +438,19 @@ def main():
                     gpu_chart.append(gpu_active)
 
                     # ===== ROW 2: CPU Total + RAM =====
-                    e_active = cpu_metrics["E-Cluster_active"]
                     p_active = cpu_metrics["P-Cluster_active"]
-                    e_freq = cpu_metrics["E-Cluster_freq_Mhz"]
                     p_freq = cpu_metrics["P-Cluster_freq_Mhz"]
                     
-                    cpu_total = (e_active + p_active) // 2
-                    cpu_total_chart.title = f"CPU {cpu_total}% | E:{e_active}%@{e_freq}M | P:{p_active}%@{p_freq}M"
+                    if e_core_count > 0:
+                        # Apple Silicon: show E and P clusters
+                        e_active = cpu_metrics.get("E-Cluster_active", 0)
+                        e_freq = cpu_metrics.get("E-Cluster_freq_Mhz", 0)
+                        cpu_total = (e_active + p_active) // 2
+                        cpu_total_chart.title = f"CPU {cpu_total}% | E:{e_active}%@{e_freq}M | P:{p_active}%@{p_freq}M"
+                    else:
+                        # Intel: just show overall CPU
+                        cpu_total = p_active
+                        cpu_total_chart.title = f"CPU {cpu_total}% @ {p_freq}MHz"
                     cpu_total_chart.append(cpu_total)
 
                     ram = get_ram_metrics_dict()
@@ -513,13 +557,11 @@ NET   Down: {format_speed(net_recv)} | Up: {format_speed(net_sent)}"""
     except KeyboardInterrupt:
         print("\nStopping...")
         print("\033[?25h")
+        provider.cleanup(monitor_process)
 
-    return powermetrics_process
+    return monitor_process
 
 
 if __name__ == "__main__":
-    powermetrics_process = main()
-    try:
-        powermetrics_process.terminate()
-    except:
-        pass
+    monitor_process = main()
+    # Cleanup is already handled in the KeyboardInterrupt handler
