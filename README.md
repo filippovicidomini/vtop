@@ -1,29 +1,38 @@
 # vtop 🖥️
 
-**Advanced System Monitor for Apple Silicon Macs**
+**Advanced System Monitor for macOS**
 
-A beautiful, real-time system monitoring tool designed specifically for Apple Silicon (M1/M2/M3/M4) Macs. Monitor every CPU core, GPU, memory, storage, and more—all from your terminal.
+A beautiful, real-time system monitoring tool for macOS. Supports both **Apple Silicon** (M1/M2/M3/M4) and **Intel** CPUs. Monitor every CPU core, GPU, memory, storage, and more—all from your terminal.
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
-![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-brightgreen.svg)
+![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/vtop.svg)
 
 ## ✨ Features
 
+### Architecture Support
+- **Apple Silicon** (M1, M2, M3, M4): Full support with powermetrics for detailed per-core monitoring
+- **Intel CPUs**: Per-core usage and frequency monitoring using psutil
+- Automatic architecture detection
+
 ### CPU Monitoring
-- **Per-core history charts** for both E-cores (Efficiency) and P-cores (Performance)
+- **Per-core history charts** for all cores
+- **Apple Silicon**: Separate E-cores (Efficiency) and P-cores (Performance) display
+- **Intel**: Unified core display
 - Real-time frequency tracking for each core
 - Total CPU usage with cluster breakdown
 
 ### GPU Monitoring
 - GPU utilization percentage and frequency
 - Historical usage chart
+ (Apple Silicon only)
+- CPU power draw with avg/peak tracking
+- GPU power draw with avg/peak tracking
+- Total system power consumption
+- Thermal throttling status
 
-### Memory & Storage
-- **RAM** usage with percentage
-- **Swap** usage tracking
-- **SSD** usage (shows actual available space like Finder)
+**Note**: Detailed power metrics require `sudo` and are only available on Apple Silicon via powermetrics.al available space like Finder)
 - **Memory Pressure** indicator (Normal/Moderate/High)
 
 ### Power Consumption
@@ -73,9 +82,17 @@ pip install -e .
 
 ## 📖 Usage
 
-vtop requires `sudo` to access power metrics:
+**Apple Silicon Macs**: vtop requires `sudo` to access detailed power metrics via powermetrics:
 
 ```bash
+sudo vtop
+```
+
+**Intel Macs**: vtop can run without `sudo` (limited power metrics):
+
+```bash
+vtop
+# Or with sudo for any additional system access:
 sudo vtop
 ```
 
@@ -104,7 +121,9 @@ Press `Ctrl+C` to exit.
 
 ## 🔧 Requirements
 
-- **macOS** with Apple Silicon (M1, M2, M3, M4 series)
+- **macOS** 
+  - Apple Silicon (M1, M2, M3, M4 series) - Full feature support
+  - Intel x86_64 CPUs - Core monitoring support (limited power metrics)
 - **Python 3.8+**
 - Terminal with Unicode support
 
@@ -114,13 +133,35 @@ Press `Ctrl+C` to exit.
 
 ## 🏗️ Architecture
 
+vtop uses a **provider pattern** to support multiple CPU architectures:
+
 ```
 vtop/
-├── vtop.py      # Main application and UI layout
-├── parsers.py   # Parsing powermetrics output
-├── utils.py     # Utility functions and data gathering
+├── vtop.py           # Main application and UI layout
+├── parsers.py        # Parsing powermetrics output (Apple Silicon)
+├── utils.py          # Utility functions and data gathering
+├── providers/
+│   ├── __init__.py   # Provider factory and exports
+│   ├── base.py       # Abstract SystemProvider interface
+│   ├── factory.py    # Architecture detection
+│   ├── apple_silicon.py  # Apple M-series implementation
+│   └── intel.py      # Intel x86_64 implementation
 └── __init__.py
 ```
+
+### Adding New Architectures
+
+To add support for a new architecture (e.g., ARM Linux):
+
+1. Create a new provider class inheriting from `SystemProvider` in `vtop/providers/`
+2. Implement all abstract methods:
+   - `get_soc_info()` - CPU information
+   - `supports_powermetrics()` - Feature availability
+   - `start_monitoring()` - Initialize monitoring
+   - `get_metrics()` - Collect CPU/GPU/thermal data
+   - `cleanup()` - Resource cleanup
+3. Update `factory.py` to detect and return your provider
+4. Test thoroughly on the target platform
 
 ## 🤝 Contributing
 
